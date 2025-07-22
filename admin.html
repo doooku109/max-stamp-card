@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>お店用スキャナー</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 10px; }
+        #reader { max-width: 500px; margin: 20px auto; border: 2px solid #eee; }
+        #result { margin-top: 20px; font-weight: bold; color: green; font-size: 1.2em;}
+        #error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>スタンプ付与スキャナー</h1>
+    <p>枠内にお客様のQRコードをかざしてください。</p>
+    <div id="reader"></div>
+    <div id="result"></div>
+
+    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
+            authDomain: "max-stamp-card.firebaseapp.com",
+            projectId: "max-stamp-card",
+            storageBucket: "max-stamp-card.appspot.com",
+            messagingSenderId: "539021057344",
+            appId: "1:539021057344:web:c4177e41fa35505680aea5"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // QRコードのスキャンが成功したときに呼ばれる関数
+        function onScanSuccess(decodedText, decodedResult) {
+            // スキャナーを停止させて、多重読み込みを防ぐ
+            html5QrcodeScanner.clear();
+            
+            const userId = decodedText;
+            const resultDiv = document.getElementById('result');
+            
+            // 確認のポップアップを表示
+            if (confirm(`お客様ID: ${userId}\n\nスタンプを1つ追加しますか？`)) {
+                
+                // データベースのスタンプ数を1増やし、最終来店日を更新する
+                const userRef = db.collection("users").doc(userId);
+                db.runTransaction((transaction) => {
+                    return transaction.get(userRef).then((doc) => {
+                        if (!doc.exists) {
+                            throw "このお客様は存在しません。";
+                        }
+                        
+                        const newStampCount = (doc.data().stamps || 0) + 1;
+                        // 今日の日付を YYYY-MM-DD 形式で取得
+                        const today = new Date().toISOString().slice(0, 10);
+                        
+                        // スタンプ数と最終来店日（lastVisitDate）を更新
+                        transaction.update(userRef, { 
+                            stamps: newStampCount,
+                            lastVisitDate: today
+                        });
+
+                        return newStampCount;
+                    });
+                }).then((newStampCount) => {
+                    resultDiv.innerText = `✅ スタンプを付与しました！\n(お客様の合計: ${newStampCount}個)\n\n次の人をスキャンするにはページを再読み込みしてください。`;
+                }).catch((error) => {
+                    resultDiv.innerHTML = `<p id="error">❌ エラーが発生しました。<br>${error}</p><p>ページを再読み込みしてやり直してください。</p>`;
+                });
+
+            } else {
+                 resultDiv.innerText = "キャンセルしました。ページを再読み込みしてください。";
+            }
+        }
+
+        // スキャナーを初期化
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", { fps: 10, qrbox: 250 }
+        );
+        // スキャナーを開始
+        html5QrcodeScanner.render(onScanSuccess);
+    </script>
+</body>
+</html>
