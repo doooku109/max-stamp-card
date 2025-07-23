@@ -3,24 +3,21 @@
 <head>
     <title>スタンプカード</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         body { font-family: sans-serif; text-align: center; }
-        #qr-container {
-            width: 256px;
-            height: 256px;
-            margin: 20px auto;
+        #debug-info {
+            margin: 20px;
+            padding: 10px;
+            border: 1px solid blue;
+            background-color: #eef;
+            color: blue;
+            min-height: 50px;
         }
-        #stamps { font-size: 3em; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>あなたのスタンプカード</h1>
-    <div id="qr-container">
-        <canvas id="qr"></canvas>
-    </div>
-    <p>現在のスタンプ数</p>
-    <p id="stamps">0</p>
+    <h1>Firebase 接続テスト</h1>
+    <div id="debug-info">調査中...</div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
@@ -37,57 +34,19 @@
         };
 
         document.addEventListener('DOMContentLoaded', function() {
-            firebase.initializeApp(firebaseConfig);
-            const db = firebase.firestore();
-            const messaging = firebase.messaging();
+            const debugInfo = document.getElementById('debug-info');
+            debugInfo.innerText = 'Firebaseの初期化を開始します...';
 
-            function requestNotificationPermission(userId) {
-                messaging.requestPermission().then(() => {
-                    return messaging.getToken();
-                }).then(token => {
-                    db.collection("users").doc(userId).update({ fcmToken: token });
-                }).catch((err) => {
-                    console.log('Unable to get permission to notify.', err);
-                });
-            }
+            try {
+                // Firebaseの初期化を試す
+                firebase.initializeApp(firebaseConfig);
 
-            // 確実性の高い方法でURLからIDを取得
-            function getUserIdFromUrl() {
-                const query = window.location.search.substring(1);
-                const params = query.split('&');
-                for (let i = 0; i < params.length; i++) {
-                    const pair = params[i].split('=');
-                    if (pair[0] === 'id') {
-                        return decodeURIComponent(pair[1].replace(/\+/g, ' '));
-                    }
-                }
-                return null;
-            }
+                // 成功したらメッセージを表示
+                debugInfo.innerText = 'Firebaseの初期化に成功しました！\nデータベースに接続できます。';
 
-            const userId = getUserIdFromUrl();
-
-            if (userId) {
-                // QRコードを表示
-                new QRious({
-                    element: document.getElementById('qr'),
-                    value: userId,
-                    size: 256
-                });
-
-                // データベースからスタンプ数を取得して表示
-                db.collection("users").doc(userId).onSnapshot((doc) => {
-                    if (doc.exists) {
-                        document.getElementById("stamps").innerText = doc.data().stamps || 0;
-                    } else {
-                        db.collection("users").doc(userId).set({ stamps: 0 });
-                    }
-                });
-
-                // 通知の許可をリクエスト
-                requestNotificationPermission(userId);
-
-            } else {
-                document.body.innerHTML = "<h1>無効なURLです</h1>";
+            } catch (e) {
+                // もしエラーが発生したら、その内容を画面に表示する
+                debugInfo.innerText = 'Firebase初期化エラー:\n' + e.message;
             }
         });
     </script>
