@@ -1,22 +1,161 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>スタンプカード</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
-        /* ... style内は変更なし ... */
+        body { font-family: sans-serif; text-align: center; padding: 10px; }
+        h1 { margin-bottom: 10px; }
+        
+        #qr-container {
+            width: 200px;
+            height: 200px;
+            margin: 10px auto;
+        }
+        
+        #load-stamps-btn {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            margin: 15px auto;
+        }
+
+        #stamp-sheet {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 5px;
+            width: 95%;
+            max-width: 450px;
+            margin: 0 auto;
+            border: 2px solid #ccc;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .stamp-slot {
+            width: 100%;
+            padding-bottom: 100%;
+            position: relative;
+            background-color: #f0f0f0;
+            border-radius: 50%;
+        }
+        .stamp-mark, .stamp-number {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+        }
+        .stamp-mark {
+            font-size: 1.8em;
+            color: #d9534f;
+            display: none;
+        }
+        .stamp-number {
+            font-size: 0.9em;
+            color: #ccc;
+            display: block;
+        }
+        .filled .stamp-mark { display: block; }
+        .filled .stamp-number { display: none; }
+
+        #valid-term-info {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #fffde7;
+            border: 1px solid #ffc107;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        
+        #history-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #history-list {
+            list-style: none;
+            padding-left: 0;
+            max-height: 150px;
+            overflow-y: auto;
+            display: inline-block;
+            text-align: left;
+        }
+        #history-list li {
+            background: #f4f4f4;
+            margin-bottom: 5px;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
+    <h1>あなたのスタンプカード</h1>
+
+    <div id="qr-container">
+        <canvas id="qr"></canvas>
+    </div>
+
+    <button id="load-stamps-btn">スタンプ表示</button>
+    
+    <div id="stamp-sheet"></div>
+
+    <div id="valid-term-info">
+        （ボタンを押して確認）
+    </div>
+    
+    <div id="history-container">
+        <h3>最近の来店履歴</h3>
+        <ul id="history-list">
+            <li>（ボタンを押して確認）</li>
+        </ul>
+    </div>
+
     <script>
-        // --- Phase 1: ページ読み込み時の処理 (変更なし) ---
+        // --- Phase 1: ページ読み込み時の処理 ---
         document.addEventListener('DOMContentLoaded', function() {
-            // ... この中の処理は変更ありません ...
+            const stampSheet = document.getElementById('stamp-sheet');
+            for (let i = 0; i < 50; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'stamp-slot';
+                let innerHTML = '<span class="stamp-mark">Ⓜ</span>';
+                if ((i + 1) % 10 === 0) {
+                    innerHTML += `<span class="stamp-number">${i + 1}</span>`;
+                }
+                slot.innerHTML = innerHTML;
+                stampSheet.appendChild(slot);
+            }
+
+            function getUserIdFromUrl() {
+                const query = window.location.search.substring(1);
+                if (!query) return null;
+                const params = query.split('&');
+                for (let i = 0; i < params.length; i++) {
+                    const pair = params[i].split('=');
+                    if (pair[0] === 'id') { return decodeURIComponent(pair[1].replace(/\+/g, ' ')); }
+                }
+                return null;
+            }
+
+            const userId = getUserIdFromUrl();
+            const loadButton = document.getElementById('load-stamps-btn');
+
+            if (userId) {
+                new QRious({ element: document.getElementById('qr'), value: userId, size: 200 });
+                loadButton.addEventListener('click', function() {
+                    loadFirebaseAndGetData(userId);
+                    loadButton.innerText = '更新中...';
+                    loadButton.disabled = true;
+                });
+            } else {
+                document.body.innerHTML = "<h1>無効なURLです</h1>";
+            }
         });
 
-        // ▼▼▼ Phase 2: スクリプトの読み込み方法をより確実なものに変更 ▼▼▼
+        // --- Phase 2: ボタンが押されてからの処理 ---
         function loadFirebaseAndGetData(userId) {
             const loadButton = document.getElementById('load-stamps-btn');
 
-            // スクリプトを1つずつ順番に読み込む関数
             function loadScript(src) {
                 return new Promise((resolve, reject) => {
                     const script = document.createElement('script');
@@ -27,25 +166,84 @@
                 });
             }
 
-            // 順番にFirebaseのスクリプトを読み込む
             loadScript("https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js")
                 .then(() => {
                     return loadScript("https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js");
                 })
                 .then(() => {
-                    // 全て成功したら、データベースに接続
                     initializeFirebaseAndRender(userId);
                 })
                 .catch(error => {
-                    // もし途中で失敗したら、エラーを表示
                     document.getElementById('valid-term-info').innerText = error.message;
-                    loadButton.innerText = 'エラー 발생. 리로드 해주세요.';
+                    loadButton.innerText = 'エラー。再読み込みしてください';
                 });
         }
-        // ▲▲▲ 変更箇所ここまで ▲▲▲
 
         function initializeFirebaseAndRender(userId) {
-            // ... この中の処理は変更ありません ...
+            const firebaseConfig = {
+                apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
+                authDomain: "max-stamp-card.firebaseapp.com",
+                projectId: "max-stamp-card",
+                storageBucket: "max-stamp-card.appspot.com",
+                messagingSenderId: "539021057344",
+                appId: "1:539021057344:web:c4177e41fa35505680aea5"
+            };
+            if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+            const db = firebase.firestore();
+
+            db.collection("users").doc(userId).onSnapshot((doc) => {
+                const historyList = document.getElementById('history-list');
+                const stampSlots = document.querySelectorAll('.stamp-slot');
+                const validTermInfo = document.getElementById('valid-term-info');
+                historyList.innerHTML = ''; 
+
+                if (doc.exists) {
+                    const data = doc.data();
+                    const stampCount = data.stamps || 0;
+                    
+                    stampSlots.forEach((slot, index) => {
+                        slot.classList.toggle('filled', index < stampCount);
+                    });
+                    
+                    const history = data.visitHistory || [];
+                    if (history.length > 0) {
+                        history.slice().reverse().forEach(date => {
+                            const li = document.createElement('li');
+                            li.textContent = date;
+                            historyList.appendChild(li);
+                        });
+                    } else {
+                        historyList.innerHTML = '<li>来店履歴はありません</li>';
+                    }
+
+                    if (data.firstStampDate) {
+                        const firstStampDate = data.firstStampDate;
+                        const startDate = new Date(firstStampDate);
+                        const oneYearLater = new Date(new Date(firstStampDate).setFullYear(startDate.getFullYear() + 1));
+                        const today = new Date();
+                        
+                        let termText = `発行日: ${firstStampDate}<br>`;
+                        if (today < oneYearLater) {
+                            termText += '<strong style="color: green;">1年以内に50個たまると1000円分の特典と交換できます。</strong>';
+                        } else {
+                            termText += '<strong style="color: red;">発行日から1年経過しているため、50個たまると500円分の特典と交換できます。</strong>';
+                        }
+                        validTermInfo.innerHTML = termText;
+                    } else {
+                        validTermInfo.innerText = '最初のスタンプが発行日になります。';
+                    }
+
+                } else {
+                    stampSlots.forEach(slot => slot.classList.remove('filled'));
+                    historyList.innerHTML = '<li>まだ登録されていません</li>';
+                    validTermInfo.innerText = '最初のスタンプが発行日になります。';
+                    db.collection("users").doc(userId).set({ stamps: 0 });
+                }
+                
+                const loadButton = document.getElementById('load-stamps-btn');
+                loadButton.innerText = 'スタンプ表示';
+                loadButton.disabled = false;
+            });
         }
     </script>
 </body>
