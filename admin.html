@@ -1,62 +1,89 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8">
     <title>お店用スキャナー</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: sans-serif; text-align: center; padding: 10px; }
-        #reader { max-width: 500px; margin: 20px auto; border: 2px solid #eee; }
+        /* ▼▼▼ スタイルを新しいライブラリ用に変更 ▼▼▼ */
+        #video-container {
+            width: 100%;
+            max-width: 500px;
+            margin: 20px auto;
+            position: relative;
+            border: 2px solid #eee;
+        }
+        video {
+            width: 100%;
+            display: block;
+        }
         #result { margin-top: 20px; font-weight: bold; color: green; font-size: 1.2em; white-space: pre-wrap; }
         #error { color: red; }
     </style>
 </head>
 <body>
     <h1>スタンプ付与スキャナー</h1>
-    <p>枠内にQRコードをかざしてください。</p>
-    <div id="reader"></div>
-    <div id="result"></div>
+    <p>枠内にQRコードをかざしてください</p>
 
-    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+    <div id="video-container">
+        <video id="qr-video"></video>
+    </div>
     
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const resultDiv = document.getElementById('result');
-            // 「基本的な部品」Html5Qrcodeオブジェクトを生成
-            const html5QrCode = new Html5Qrcode("reader");
+    <div id="result">カメラを起動しています...</div>
 
-            // スキャン成功時の処理
-            const qrCodeSuccessCallback = (decodedText, decodedResult) => {
-                // スキャナーを停止
-                html5QrCode.stop().then(ignore => {
-                    const userId = decodedText;
-                    const amountStr = prompt(`お客様ID: ${userId}\n\nお支払い金額（税抜）を入力してください。`);
-                    if (amountStr === null || amountStr.trim() === '') {
-                        resultDiv.innerText = "キャンセルしました。ページを再読み込みしてください。";
-                        return;
-                    }
-                    const paymentAmount = parseInt(amountStr, 10);
-                    if (isNaN(paymentAmount)) {
-                        resultDiv.innerHTML = `<p id="error">無効な金額です。ページを再読み込みしてください。</p>`;
-                        return;
-                    }
-                    resultDiv.innerText = 'データベースに接続中...';
-                    loadFirebaseAndUpdate(userId, paymentAmount);
-                }).catch(err => {
-                    console.error("スキャナーの停止に失敗", err);
-                });
+    <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async function() {
+            const videoElem = document.getElementById('qr-video');
+            const resultDiv = document.getElementById('result');
+
+            // QRコードがスキャンされたときの処理
+            const onScanSuccess = (result) => {
+                qrScanner.stop(); // スキャナーを停止
+                const userId = result.data;
+                
+                const amountStr = prompt(`お客様ID: ${userId}\n\nお支払い金額（税抜）を入力してください。`);
+                if (amountStr === null || amountStr.trim() === '') {
+                    resultDiv.innerText = "キャンセルしました。ページを再読み込みしてください。";
+                    return;
+                }
+                const paymentAmount = parseInt(amountStr, 10);
+                if (isNaN(paymentAmount)) {
+                    resultDiv.innerHTML = `<p id="error">無効な金額です。ページを再読み込みしてください。</p>`;
+                    return;
+                }
+                resultDiv.innerText = 'データベースに接続中...';
+                loadFirebaseAndUpdate(userId, paymentAmount);
             };
 
-            // スキャナーの設定
-            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            // カメラがあるかチェック
+            if (!await QrScanner.hasCamera()) {
+                resultDiv.innerHTML = `<p id="error">使用できるカメラが見つかりません。</p>`;
+                return;
+            }
 
-            // カメラを使ってスキャンを開始
-            html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
-                .catch(err => {
-                    resultDiv.innerHTML = `<p id="error">カメラの起動に失敗しました。<br>${err}</p>`;
-                });
+            // スキャナーを初期化
+            const qrScanner = new QrScanner(videoElem, onScanSuccess, {
+                highlightScanRegion: true,
+                highlightCodeOutline: true,
+            });
+
+            // スキャナーを開始
+            try {
+                await qrScanner.start();
+                resultDiv.innerText = 'スキャン待機中...';
+            } catch (e) {
+                resultDiv.innerHTML = `<p id="error">カメラの起動に失敗しました。<br>${e.message}</p>`;
+            }
         });
 
         // 以下、Firebase関連の関数（変更なし）
+        function loadFirebaseAndUpdate(userId, paymentAmount) { /* ... */ }
+        function runDatabaseTransaction(userId, paymentAmount) { /* ... */ }
+
+        // --- loadFirebaseAndUpdateとrunDatabaseTransactionの完全なコード ---
         function loadFirebaseAndUpdate(userId, paymentAmount) {
             const scripts = [
                 "https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js",
@@ -76,7 +103,6 @@
                 document.head.appendChild(script);
             });
         }
-
         function runDatabaseTransaction(userId, paymentAmount) {
             const firebaseConfig = {
                 apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
@@ -112,7 +138,7 @@
             }).then((result) => {
                 resultDiv.innerText = `✅ スタンプを付与しました！\n\n今回追加されたスタンプ: ${result.addedStamps}個\nお客様の合計スタンプ: ${result.finalStamps}個\n次回の繰越金額: ${result.newKeep}円\n\nページを再読み込みして次の人をスキャンしてください。`;
             }).catch((error) => {
-                resultDiv.innerHTML = `<p id="error">❌ エラーが発生しました。<br>${error}</p><p>ページを再読み込みしてやり直してください。</p>`;
+                resultDiv.innerHTML = `<p id="error">❌ エラーが発生しました。<br>${error}</p><p>ページを再読み込みしてやり直してください。`;
             });
         }
     </script>
