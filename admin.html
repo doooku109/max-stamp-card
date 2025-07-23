@@ -12,25 +12,23 @@
 </head>
 <body>
     <h1>スタンプ付与スキャナー</h1>
-    <p>枠内にお客様のQRコードをかざしてください。</p>
+    <p>枠内にお客様のQRコードをかざしてくださ。</p>
     <div id="reader"></div>
     <div id="result"></div>
 
-    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js" onload="startApp()"></script>
     
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            let html5QrcodeScanner; // スキャナーオブジェクトを保持する変数
+        // ▼▼▼ 修正箇所：全体の処理をstartApp()関数で囲む ▼▼▼
+        function startApp() {
+            let html5QrcodeScanner; 
 
-            // スキャン成功時の処理
             function onScanSuccess(decodedText, decodedResult) {
                 if (html5QrcodeScanner) {
-                    html5QrcodeScanner.clear(); // スキャナーを停止
+                    html5QrcodeScanner.clear();
                 }
-                
                 const userId = decodedText;
                 const resultDiv = document.getElementById('result');
-
                 const amountStr = prompt(`お客様ID: ${userId}\n\nお支払い金額（税抜）を入力してください。`);
                 if (amountStr === null || amountStr.trim() === '') {
                     resultDiv.innerText = "キャンセルしました。ページを再読み込みしてください。";
@@ -41,29 +39,24 @@
                     resultDiv.innerHTML = `<p id="error">無効な金額です。ページを再読み込みしてください。</p>`;
                     return;
                 }
-
-                // スキャンが成功してから、Firebaseを読み込んで処理を開始
                 resultDiv.innerText = 'データベースに接続中...';
                 loadFirebaseAndUpdate(userId, paymentAmount);
             }
 
-            // スキャナーを起動する
             try {
                 html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
                 html5QrcodeScanner.render(onScanSuccess);
             } catch(e) {
                 document.getElementById('result').innerHTML = `<p id="error">カメラの起動に失敗しました。<br>${e.message}</p>`;
             }
-        });
+        }
 
-        // Firebaseを読み込んで、データベースを更新する関数
         function loadFirebaseAndUpdate(userId, paymentAmount) {
             const scripts = [
                 "https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js",
                 "https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"
             ];
             let scriptsLoaded = 0;
-
             scripts.forEach(function(src) {
                 const script = document.createElement('script');
                 script.src = src;
@@ -78,7 +71,6 @@
             });
         }
 
-        // データベース処理を実行する関数
         function runDatabaseTransaction(userId, paymentAmount) {
             const firebaseConfig = {
                 apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
@@ -88,38 +80,27 @@
                 messagingSenderId: "539021057344",
                 appId: "1:539021057344:web:c4177e41fa35505680aea5"
             };
-
             firebase.initializeApp(firebaseConfig);
             const db = firebase.firestore();
             const userRef = db.collection("users").doc(userId);
             const resultDiv = document.getElementById('result');
-
             db.runTransaction((transaction) => {
                 return transaction.get(userRef).then((doc) => {
-                    let currentStamps = 0;
-                    let currentKeep = 0;
-                    let history = [];
-
-                    if (doc.exists) {
-                        currentStamps = doc.data().stamps || 0;
-                        currentKeep = doc.data().keep || 0;
-                        history = doc.data().visitHistory || [];
-                    }
-
+                    let data = doc.exists ? doc.data() : {};
+                    let currentStamps = data.stamps || 0;
+                    let currentKeep = data.keep || 0;
+                    let history = data.visitHistory || [];
                     let totalAmount = currentKeep + paymentAmount;
                     totalAmount = Math.round(totalAmount / 10) * 10;
                     const newStamps = Math.floor(totalAmount / 1000);
                     const newKeep = totalAmount % 1000;
                     const finalStamps = currentStamps + newStamps;
                     const today = new Date().toISOString().slice(0, 10);
-
                     history.push(today);
                     if (history.length > 5) { history.shift(); }
-
                     transaction.set(userRef, { 
                         stamps: finalStamps, keep: newKeep, lastVisitDate: today, visitHistory: history
                     }, { merge: true });
-
                     return { addedStamps: newStamps, finalStamps: finalStamps, newKeep: newKeep };
                 });
             }).then((result) => {
