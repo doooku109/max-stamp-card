@@ -1,165 +1,59 @@
-
 <!DOCTYPE html>
 <html>
 <head>
-    <title>スタンプカード</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 10px; }
-        #stamp-sheet {
-            display: grid;
-            grid-template-columns: repeat(10, 1fr);
-            gap: 5px;
-            width: 90%;
-            max-width: 400px;
-            margin: 20px auto;
-            border: 2px solid #ccc;
+        /* ... 他のスタイルは変更なし ... */
+        /* ▼▼▼ 有効期限表示用のスタイルを追加 ▼▼▼ */
+        #valid-term-info {
+            margin-top: 15px;
             padding: 10px;
-            border-radius: 8px;
+            background-color: #fffde7;
+            border: 1px solid #ffc107;
+            border-radius: 5px;
+            display: inline-block;
         }
-        .stamp-slot {
-            width: 100%;
-            padding-bottom: 100%;
-            position: relative;
-            background-color: #f0f0f0;
-            border-radius: 50%;
-        }
-        .stamp-mark {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 1.5em; /* マスのサイズに合わせて調整 */
-            font-weight: bold;
-            color: #d9534f;
-            display: none;
-        }
-        .filled .stamp-mark {
-            display: block;
-        }
-        #load-stamps-btn { padding: 10px 20px; font-size: 1em; cursor: pointer; }
-        #qr-container { width: 200px; height: 200px; margin: 20px auto; } /* 少し小さく調整 */
-        #history-container { margin-top: 20px; text-align: left; display: inline-block; }
-        #history-list { list-style: none; padding-left: 0; }
-        #history-list li { background: #f4f4f4; margin-bottom: 5px; padding: 8px 12px; border-radius: 4px; }
     </style>
 </head>
 <body>
     <h1>あなたのスタンプカード</h1>
     <div id="stamp-sheet"></div>
+
+    <div id="valid-term-info">
+        有効期限：(ボタンを押して確認)
+    </div>
+
     <button id="load-stamps-btn">スタンプと履歴を更新</button>
     <hr style="margin-top: 20px;">
-    <div id="qr-container">
-        <canvas id="qr"></canvas>
-    </div>
-    <div id="history-container">
-        <h3>最近の来店履歴</h3>
-        <ul id="history-list">
-            <li>（ボタンを押して確認）</li>
-        </ul>
-    </div>
-
     <script>
-        // Phase 1: ページ読み込み時に、QRとスタンプの枠だけを確実に表示
-        document.addEventListener('DOMContentLoaded', function() {
-            // スタンプの枠を50個生成
-            const stampSheet = document.getElementById('stamp-sheet');
-            for (let i = 0; i < 50; i++) {
-                const slot = document.createElement('div');
-                slot.className = 'stamp-slot';
-                slot.innerHTML = '<span class="stamp-mark">Ⓜ</span>';
-                stampSheet.appendChild(slot);
-            }
-
-            function getUserIdFromUrl() {
-                const query = window.location.search.substring(1);
-                const params = query.split('&');
-                for (let i = 0; i < params.length; i++) {
-                    const pair = params[i].split('=');
-                    if (pair[0] === 'id') { return decodeURIComponent(pair[1].replace(/\+/g, ' ')); }
-                }
-                return null;
-            }
-
-            const userId = getUserIdFromUrl();
-            const loadButton = document.getElementById('load-stamps-btn');
-
-            if (userId) {
-                new QRious({ element: document.getElementById('qr'), value: userId, size: 200 });
-                loadButton.addEventListener('click', function() {
-                    loadFirebaseAndGetData(userId);
-                    loadButton.innerText = '更新中...';
-                    loadButton.disabled = true;
-                });
-            } else {
-                document.body.innerHTML = "<h1>無効なURLです</h1>";
-            }
-        });
-
-        // Phase 2: ボタンが押されてからFirebaseを読み込み、データを反映
-        function loadFirebaseAndGetData(userId) {
-            const scripts = [
-                "https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js",
-                "https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"
-            ];
-            let scriptsLoaded = 0;
-            scripts.forEach(function(src) {
-                const script = document.createElement('script');
-                script.src = src;
-                script.async = false;
-                script.onload = function() {
-                    scriptsLoaded++;
-                    if (scriptsLoaded === scripts.length) {
-                        initializeFirebaseAndRender(userId);
-                    }
-                };
-                document.head.appendChild(script);
-            });
-        }
+        // ... Phase 1 と loadFirebaseAndGetData 関数は変更なし ...
 
         function initializeFirebaseAndRender(userId) {
-            const firebaseConfig = {
-                apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
-                authDomain: "max-stamp-card.firebaseapp.com",
-                projectId: "max-stamp-card",
-                storageBucket: "max-stamp-card.appspot.com",
-                messagingSenderId: "539021057344",
-                appId: "1:539021057344:web:c4177e41fa35505680aea5"
-            };
-            if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
-            const db = firebase.firestore();
+            // ... Firebase初期化は変更なし ...
 
             db.collection("users").doc(userId).onSnapshot((doc) => {
-                const historyList = document.getElementById('history-list');
-                const stampSlots = document.querySelectorAll('.stamp-slot');
-                historyList.innerHTML = ''; 
+                // ... スタンプと履歴の表示処理は変更なし ...
 
-                if (doc.exists) {
-                    const stampCount = doc.data().stamps || 0;
-                    stampSlots.forEach((slot, index) => {
-                        slot.classList.toggle('filled', index < stampCount);
-                    });
+                // ▼▼▼ 有効期限を表示する処理を追加 ▼▼▼
+                const validTermInfo = document.getElementById('valid-term-info');
+                if (doc.exists && doc.data().firstStampDate) {
+                    const firstStampDate = doc.data().firstStampDate;
+                    const startDate = new Date(firstStampDate);
+                    const oneYearLater = new Date(new Date(firstStampDate).setFullYear(startDate.getFullYear() + 1));
+                    const today = new Date();
                     
-                    const history = doc.data().visitHistory || [];
-                    if (history.length > 0) {
-                        history.slice().reverse().forEach(date => {
-                            const li = document.createElement('li');
-                            li.textContent = date;
-                            historyList.appendChild(li);
-                        });
+                    let termText = `有効期限の開始日: ${firstStampDate}<br>`;
+                    if (today < oneYearLater) {
+                        termText += '<strong style="color: green;">1000円特典の対象期間内です</strong>';
                     } else {
-                        historyList.innerHTML = '<li>来店履歴はありません</li>';
+                        termText += '<strong style="color: red;">1000円特典の対象期間外です</strong>';
                     }
+                    validTermInfo.innerHTML = termText;
                 } else {
-                    stampSlots.forEach(slot => slot.classList.remove('filled'));
-                    historyList.innerHTML = '<li>まだ登録されていません</li>';
-                    db.collection("users").doc(userId).set({ stamps: 0 });
+                    validTermInfo.innerText = '有効期限：最初のスタンプ獲得で開始します';
                 }
-                
-                const loadButton = document.getElementById('load-stamps-btn');
-                loadButton.innerText = 'スタンプと履歴を更新';
-                loadButton.disabled = false;
+                // ▲▲▲ ここまで ▲▲▲
+
+                // ... ボタンの表示を元に戻す処理は変更なし ...
             });
         }
     </script>
