@@ -3,16 +3,19 @@
 <head>
     <title>スタンプカード</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         body { font-family: sans-serif; text-align: center; }
-        #qrcode { width: 256px; height: 256px; margin: 20px auto; }
+        /* QRコードの表示エリアを調整 */
+        #qr-container { width: 256px; height: 256px; margin: 20px auto; }
         #stamps { font-size: 3em; font-weight: bold; }
     </style>
 </head>
 <body>
     <h1>あなたのスタンプカード</h1>
-    <div id="qrcode"></div>
+    <div id="qr-container">
+        <canvas id="qr"></canvas>
+    </div>
     <p>現在のスタンプ数</p>
     <p id="stamps">0</p>
 
@@ -30,8 +33,6 @@
             appId: "1:539021057344:web:c4177e41fa35505680aea5"
         };
 
-        // ▼▼▼ ここからが修正箇所 ▼▼▼
-        // ページの読み込みが完了してから、中の処理を実行する
         document.addEventListener('DOMContentLoaded', function() {
             firebase.initializeApp(firebaseConfig);
             const db = firebase.firestore();
@@ -51,10 +52,13 @@
             const userId = urlParams.get('id');
 
             if (userId) {
-                // QRコードを描画
-                new QRCode(document.getElementById("qrcode"), userId);
+                // ▼▼▼ QRコードを描画する命令を新しいものに変更 ▼▼▼
+                new QRious({
+                    element: document.getElementById('qr'),
+                    value: userId,
+                    size: 256
+                });
 
-                // データベースを監視
                 db.collection("users").doc(userId).onSnapshot((doc) => {
                     if (doc.exists) {
                         document.getElementById("stamps").innerText = doc.data().stamps || 0;
@@ -69,7 +73,6 @@
                 document.body.innerHTML = "<h1>無効なURLです</h1>";
             }
         });
-        // ▲▲▲ ここまでが修正箇所 ▲▲▲
     </script>
 </body>
 </html>
