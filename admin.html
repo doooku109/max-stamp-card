@@ -12,58 +12,51 @@
 </head>
 <body>
     <h1>スタンプ付与スキャナー</h1>
-    <p>枠内にお客様のQRコードをかざしてください</p>
+    <p>枠内にQRコードをかざしてください。</p>
     <div id="reader"></div>
     <div id="result"></div>
 
+    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+    
     <script>
-        // ▼▼▼ このページ全体のメインプログラム ▼▼▼
         document.addEventListener('DOMContentLoaded', function() {
-            // スキャナーライブラリのスクリプトを動的に作成
-            const scannerLibrary = document.createElement('script');
-            scannerLibrary.src = 'https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js';
+            const resultDiv = document.getElementById('result');
+            // 「基本的な部品」Html5Qrcodeオブジェクトを生成
+            const html5QrCode = new Html5Qrcode("reader");
 
-            // ライブラリの読み込みが完了した後に実行される処理
-            scannerLibrary.onload = function() {
-                startScanner(); // ライブラリが準備できたので、カメラを起動
+            // スキャン成功時の処理
+            const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+                // スキャナーを停止
+                html5QrCode.stop().then(ignore => {
+                    const userId = decodedText;
+                    const amountStr = prompt(`お客様ID: ${userId}\n\nお支払い金額（税抜）を入力してください。`);
+                    if (amountStr === null || amountStr.trim() === '') {
+                        resultDiv.innerText = "キャンセルしました。ページを再読み込みしてください。";
+                        return;
+                    }
+                    const paymentAmount = parseInt(amountStr, 10);
+                    if (isNaN(paymentAmount)) {
+                        resultDiv.innerHTML = `<p id="error">無効な金額です。ページを再読み込みしてください。</p>`;
+                        return;
+                    }
+                    resultDiv.innerText = 'データベースに接続中...';
+                    loadFirebaseAndUpdate(userId, paymentAmount);
+                }).catch(err => {
+                    console.error("スキャナーの停止に失敗", err);
+                });
             };
 
-            // 作成したスクリプトをページに追加して、読み込みを開始
-            document.head.appendChild(scannerLibrary);
+            // スキャナーの設定
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+            // カメラを使ってスキャンを開始
+            html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
+                .catch(err => {
+                    resultDiv.innerHTML = `<p id="error">カメラの起動に失敗しました。<br>${err}</p>`;
+                });
         });
 
-
-        // カメラを起動する関数
-        function startScanner() {
-            let html5QrcodeScanner; 
-
-            function onScanSuccess(decodedText, decodedResult) {
-                if (html5QrcodeScanner) { html5QrcodeScanner.clear(); }
-                const userId = decodedText;
-                const resultDiv = document.getElementById('result');
-                const amountStr = prompt(`お客様ID: ${userId}\n\nお支払い金額（税抜）を入力してください。`);
-                if (amountStr === null || amountStr.trim() === '') {
-                    resultDiv.innerText = "キャンセルしました。ページを再読み込みしてください。";
-                    return;
-                }
-                const paymentAmount = parseInt(amountStr, 10);
-                if (isNaN(paymentAmount)) {
-                    resultDiv.innerHTML = `<p id="error">無効な金額です。ページを再読み込みしてください。</p>`;
-                    return;
-                }
-                resultDiv.innerText = 'データベースに接続中...';
-                loadFirebaseAndUpdate(userId, paymentAmount);
-            }
-
-            try {
-                html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-                html5QrcodeScanner.render(onScanSuccess);
-            } catch(e) {
-                document.getElementById('result').innerHTML = `<p id="error">カメラの起動に失敗しました。<br>${e.message}</p>`;
-            }
-        }
-
-        // Firebaseを読み込んでデータベースを更新する関数
+        // 以下、Firebase関連の関数（変更なし）
         function loadFirebaseAndUpdate(userId, paymentAmount) {
             const scripts = [
                 "https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js",
@@ -84,7 +77,6 @@
             });
         }
 
-        // データベース処理を実行する関数
         function runDatabaseTransaction(userId, paymentAmount) {
             const firebaseConfig = {
                 apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
