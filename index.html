@@ -1,61 +1,92 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>スタンプカード</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
-        /* ... 他のスタイルは変更なし ... */
-        /* ▼▼▼ 有効期限表示用のスタイルを追加 ▼▼▼ */
-        #valid-term-info {
-            margin-top: 15px;
-            padding: 10px;
-            background-color: #fffde7;
-            border: 1px solid #ffc107;
-            border-radius: 5px;
-            display: inline-block;
+        body { font-family: sans-serif; text-align: center; padding: 10px; }
+        #debug-info {
+            margin: 10px; padding: 10px; border: 1px solid blue; background-color: #eef;
+            color: blue; text-align: left; white-space: pre-wrap;
         }
+        #stamp-sheet { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; width: 90%; max-width: 400px; margin: 20px auto; border: 2px solid #ccc; padding: 10px; border-radius: 8px; }
+        .stamp-slot { width: 100%; padding-bottom: 100%; position: relative; background-color: #f0f0f0; border-radius: 50%; }
+        /* 他のスタイルは変更なし */
     </style>
 </head>
 <body>
+    <div id="debug-info">調査を開始します...</div>
+
     <h1>あなたのスタンプカード</h1>
     <div id="stamp-sheet"></div>
-
-    <div id="valid-term-info">
-        有効期限：(ボタンを押して確認)
-    </div>
-
     <button id="load-stamps-btn">スタンプと履歴を更新</button>
     <hr style="margin-top: 20px;">
+    <div id="qr-container">
+        <canvas id="qr"></canvas>
+    </div>
+    <div id="history-container">
+        <h3>最近の来店履歴</h3>
+        <ul id="history-list">
+            <li>（ボタンを押して確認）</li>
+        </ul>
+    </div>
+
     <script>
-        // ... Phase 1 と loadFirebaseAndGetData 関数は変更なし ...
+        // Phase 1: ページ読み込み時の処理
+        document.addEventListener('DOMContentLoaded', function() {
+            const debugInfo = document.getElementById('debug-info');
+            debugInfo.innerText = 'ステップ1: ページの準備が完了しました。';
 
-        function initializeFirebaseAndRender(userId) {
-            // ... Firebase初期化は変更なし ...
-
-            db.collection("users").doc(userId).onSnapshot((doc) => {
-                // ... スタンプと履歴の表示処理は変更なし ...
-
-                // ▼▼▼ 有効期限を表示する処理を追加 ▼▼▼
-                const validTermInfo = document.getElementById('valid-term-info');
-                if (doc.exists && doc.data().firstStampDate) {
-                    const firstStampDate = doc.data().firstStampDate;
-                    const startDate = new Date(firstStampDate);
-                    const oneYearLater = new Date(new Date(firstStampDate).setFullYear(startDate.getFullYear() + 1));
-                    const today = new Date();
-                    
-                    let termText = `有効期限の開始日: ${firstStampDate}<br>`;
-                    if (today < oneYearLater) {
-                        termText += '<strong style="color: green;">1000円特典の対象期間内です</strong>';
-                    } else {
-                        termText += '<strong style="color: red;">1000円特典の対象期間外です</strong>';
-                    }
-                    validTermInfo.innerHTML = termText;
-                } else {
-                    validTermInfo.innerText = '有効期限：最初のスタンプ獲得で開始します';
+            try {
+                // スタンプの枠を50個生成
+                const stampSheet = document.getElementById('stamp-sheet');
+                if (!stampSheet) throw new Error('stamp-sheet が見つかりません。');
+                for (let i = 0; i < 50; i++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'stamp-slot';
+                    slot.innerHTML = '<span class="stamp-mark">Ⓜ</span>';
+                    stampSheet.appendChild(slot);
                 }
-                // ▲▲▲ ここまで ▲▲▲
+                debugInfo.innerText += '\nステップ2: スタンプの枠を生成しました。';
 
-                // ... ボタンの表示を元に戻す処理は変更なし ...
-            });
-        }
+                // URLからIDを取得する関数
+                function getUserIdFromUrl() {
+                    const query = window.location.search.substring(1);
+                    if (!query) return null;
+                    const params = query.split('&');
+                    for (let i = 0; i < params.length; i++) {
+                        const pair = params[i].split('=');
+                        if (pair[0] === 'id') { return decodeURIComponent(pair[1].replace(/\+/g, ' ')); }
+                    }
+                    return null;
+                }
+
+                const userId = getUserIdFromUrl();
+                if (!userId) {
+                    throw new Error('URLにユーザーIDが見つかりません。');
+                }
+                debugInfo.innerText += '\nステップ3: ユーザーIDを取得しました: ' + userId;
+                
+                // QRコードを描画
+                new QRious({ element: document.getElementById('qr'), value: userId, size: 200 });
+                debugInfo.innerText += '\nステップ4: QRコードの描画に成功しました！';
+
+                const loadButton = document.getElementById('load-stamps-btn');
+                loadButton.addEventListener('click', function() {
+                    loadFirebaseAndGetData(userId);
+                    loadButton.innerText = '更新中...';
+                    loadButton.disabled = true;
+                });
+
+            } catch (e) {
+                debugInfo.innerText += '\n\nエラーが発生しました: ' + e.message;
+            }
+        });
+
+        // Phase 2: ボタンが押されてからの処理（変更なし）
+        function loadFirebaseAndGetData(userId) { /* ... */ }
+        function initializeFirebaseAndRender(userId) { /* ... */ }
     </script>
 </body>
 </html>
