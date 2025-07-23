@@ -1,161 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <title>お店用スキャナー</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: sans-serif; text-align: center; padding: 10px; }
-        #video-container {
-            width: 100%;
-            max-width: 500px;
-            margin: 20px auto;
-            position: relative;
-            border: 2px solid #eee;
-        }
-        video {
-            width: 100%;
-            display: block;
-        }
-        #result { margin-top: 20px; font-weight: bold; color: green; font-size: 1.2em; white-space: pre-wrap; }
-        #error { color: red; }
-    </style>
-</head>
+    </head>
 <body>
-    <h1>スタンプ付与スキャナー</h1>
-    <p>枠内にQRコードをかざしてください。</p>
-    
-    <div id="video-container">
-        <video id="qr-video"></video>
-    </div>
-    
-    <div id="result">カメラを起動しています...</div>
-
-    <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
-
     <script>
-        document.addEventListener('DOMContentLoaded', async function() {
-            const videoElem = document.getElementById('qr-video');
-            const resultDiv = document.getElementById('result');
-            let qrScanner; // スキャナーオブジェクトを保持
+        // ... document.addEventListenerとloadFirebaseAndUpdate関数は変更なし ...
 
-            // スキャンが成功したときの処理
-            const onScanSuccess = (result) => {
-                if (qrScanner) {
-                    qrScanner.stop(); // スキャナーを停止
-                }
-                const userId = result.data;
-                
-                const amountStr = prompt(`お客様ID: ${userId}\n\nお支払い金額（税抜）を入力してください。`);
-                if (amountStr === null || amountStr.trim() === '') {
-                    resultDiv.innerText = "キャンセルしました。ページを再読み込みしてください。";
-                    return;
-                }
-                const paymentAmount = parseInt(amountStr, 10);
-                if (isNaN(paymentAmount)) {
-                    resultDiv.innerHTML = `<p id="error">無効な金額です。ページを再読み込みしてください。</p>`;
-                    return;
-                }
-                resultDiv.innerText = 'データベースに接続中...';
-                // スキャン成功後にFirebaseを読み込んで処理を開始
-                loadFirebaseAndUpdate(userId, paymentAmount);
-            };
-
-            // カメラがあるかチェック
-            if (!await QrScanner.hasCamera()) {
-                resultDiv.innerHTML = `<p id="error">使用できるカメラが見つかりません。</p>`;
-                return;
-            }
-
-            // スキャナーを初期化して起動
-            qrScanner = new QrScanner(videoElem, onScanSuccess, {
-                highlightScanRegion: true,
-                highlightCodeOutline: true,
-            });
-
-            try {
-                await qrScanner.start();
-                resultDiv.innerText = 'スキャン待機中...';
-            } catch (e) {
-                resultDiv.innerHTML = `<p id="error">カメラの起動に失敗しました。<br>${e.message}</p>`;
-            }
-        });
-
-        // 以下、Firebase関連の関数（index.htmlと同じ構造）
-        function loadFirebaseAndUpdate(userId, paymentAmount) {
-            const scripts = [
-                "https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js",
-                "https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"
-            ];
-            let scriptsLoaded = 0;
-            scripts.forEach(function(src) {
-                const script = document.createElement('script');
-                script.src = src;
-                script.async = false;
-                script.onload = function() {
-                    scriptsLoaded++;
-                    if (scriptsLoaded === scripts.length) {
-                        runDatabaseTransaction(userId, paymentAmount);
-                    }
-                };
-                document.head.appendChild(script);
-            });
-        }
         function runDatabaseTransaction(userId, paymentAmount) {
-            const firebaseConfig = {
-                apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
-                authDomain: "max-stamp-card.firebaseapp.com",
-                projectId: "max-stamp-card",
-                storageBucket: "max-stamp-card.appspot.com",
-                messagingSenderId: "539021057344",
-                appId: "1:539021057344:web:c4177e41fa35505680aea5"
-            };
-            if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
-            const db = firebase.firestore();
-            const userRef = db.collection("users").doc(userId);
-            const resultDiv = document.getElementById('result');
+            // ... Firebase初期化は変更なし ...
+
             db.runTransaction((transaction) => {
                 return transaction.get(userRef).then((doc) => {
-                    let data = doc.exists ? doc.data() : {};
-                    let currentStamps = data.stamps || 0;
-                    let currentKeep = data.keep || 0;
-                    let history = data.visitHistory || [];
-                    let firstStampDate = data.firstStampDate || null;
+                    // ... 変数定義は変更なし ...
 
                     if (paymentAmount === 0) { // 特典交換モード
-                        if (currentStamps < 50) throw "スタンプが50個に達していません。";
-                        const today = new Date();
-                        const startDate = new Date(firstStampDate);
-                        const oneYearLater = new Date(startDate.setFullYear(startDate.getFullYear() + 1));
-                        let reward = (today < oneYearLater) ? 1000 : 500;
-                        transaction.update(userRef, { stamps: 0, keep: 0, firstStampDate: null, lastReward: `${new Date().toISOString().slice(0,10)}に${reward}円特典交換` });
+                        // ... エラーチェックと特典金額の計算は変更なし ...
+                        
+                        // ▼▼▼ 修正箇所：keepをリセットしないように変更 ▼▼▼
+                        transaction.update(userRef, { 
+                            stamps: 0, // スタンプだけをリセット
+                            // keep: 0,  <- この行を削除またはコメントアウト
+                            firstStampDate: null, 
+                            lastReward: `${new Date().toISOString().slice(0,10)}に${reward}円特典交換` 
+                        });
                         return { reward: reward };
                     }
 
-                    let totalAmount = currentKeep + paymentAmount;
-                    totalAmount = Math.round(totalAmount / 10) * 10;
-                    const newStamps = Math.floor(totalAmount / 1000);
-                    if (newStamps > 0 && currentStamps === 0) {
-                        firstStampDate = new Date().toISOString().slice(0, 10);
-                    }
-                    const finalStamps = currentStamps + newStamps;
-                    const newKeep = totalAmount % 1000;
-                    const today = new Date().toISOString().slice(0, 10);
-                    history.push(today);
-                    if (history.length > 5) { history.shift(); }
-                    transaction.set(userRef, { 
-                        stamps: finalStamps, keep: newKeep, lastVisitDate: today, visitHistory: history, firstStampDate: firstStampDate
-                    }, { merge: true });
-                    return { addedStamps: newStamps, finalStamps: finalStamps, newKeep: newKeep };
+                    // ... 通常のスタンプ付与処理は変更なし ...
                 });
             }).then((result) => {
-                if (result.reward) {
-                    resultDiv.innerText = `✅ 特典交換完了！\n\n${result.reward}円分の特典を適用してください。`;
-                } else {
-                    resultDiv.innerText = `✅ スタンプを付与しました！\n\n今回追加されたスタンプ: ${result.addedStamps}個\nお客様の合計スタンプ: ${result.finalStamps}個\n次回の繰越金額: ${result.newKeep}円\n\nページを再読み込みして次の人をスキャンしてください。`;
-                }
+                // ... thenの処理は変更なし ...
             }).catch((error) => {
-                resultDiv.innerHTML = `<p id="error">❌ エラーが発生しました。<br>${error}</p><p>ページを再読み込みしてやり直してください。`;
+                // ... catchの処理は変更なし ...
             });
         }
     </script>
