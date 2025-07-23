@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -7,13 +8,12 @@
     <style>
         body { font-family: sans-serif; text-align: center; }
         #qr-container { width: 256px; height: 256px; margin: 20px auto; }
-        #stamps { font-size: 3em; font-weight: bold; }
-        #load-stamps-btn {
-            padding: 10px 20px;
-            font-size: 1em;
-            cursor: pointer;
-            margin-top: 10px;
-        }
+        #stamps { font-size: 3em; font-weight: bold; margin-top: 0; margin-bottom: 20px; }
+        #load-stamps-btn { padding: 10px 20px; font-size: 1em; cursor: pointer; margin-top: 10px; }
+        /* ▼▼▼ 履歴表示用のスタイルを追加 ▼▼▼ */
+        #history-container { margin-top: 30px; text-align: left; display: inline-block; }
+        #history-list { list-style: none; padding-left: 0; }
+        #history-list li { background: #f4f4f4; margin-bottom: 5px; padding: 8px 12px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -25,67 +25,26 @@
     <p id="stamps">（下のボタンを押して確認）</p>
     <button id="load-stamps-btn">スタンプ数を更新</button>
 
-    <script>
-        // ▼▼▼ Phase 1: QRコードの表示だけを先に行う ▼▼▼
-        document.addEventListener('DOMContentLoaded', function() {
-            function getUserIdFromUrl() {
-                const query = window.location.search.substring(1);
-                const params = query.split('&');
-                for (let i = 0; i < params.length; i++) {
-                    const pair = params[i].split('=');
-                    if (pair[0] === 'id') {
-                        return decodeURIComponent(pair[1].replace(/\+/g, ' '));
-                    }
-                }
-                return null;
-            }
+    <div id="history-container">
+        <h3>最近の来店履歴</h3>
+        <ul id="history-list">
+            <li>履歴はありません</li>
+        </ul>
+    </div>
 
+    <script>
+        // ... (Phase 1 の部分は変更なし) ...
+        document.addEventListener('DOMContentLoaded', function() {
+            function getUserIdFromUrl() { /* ... */ }
             const userId = getUserIdFromUrl();
             const loadButton = document.getElementById('load-stamps-btn');
-
             if (userId) {
-                // QRコードを描画
-                new QRious({
-                    element: document.getElementById('qr'),
-                    value: userId,
-                    size: 256
-                });
-
-                // ボタンがクリックされたら、Firebaseの処理を開始
-                loadButton.addEventListener('click', function() {
-                    loadFirebaseAndGetStamps(userId);
-                    loadButton.innerText = '更新中...';
-                    loadButton.disabled = true;
-                });
-
-            } else {
-                document.body.innerHTML = "<h1>無効なURLです</h1>";
-            }
+                new QRious({ element: document.getElementById('qr'), value: userId, size: 256 });
+                loadButton.addEventListener('click', function() { /* ... */ });
+            } else { /* ... */ }
         });
 
-        // ▼▼▼ Phase 2: ボタンが押されてからFirebaseを読み込み、接続する ▼▼▼
-        function loadFirebaseAndGetStamps(userId) {
-            const scripts = [
-                "https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js",
-                "https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"
-            ];
-            let scriptsLoaded = 0;
-
-            scripts.forEach(function(src) {
-                const script = document.createElement('script');
-                script.src = src;
-                script.async = false; // 順番に読み込む
-                script.onload = function() {
-                    scriptsLoaded++;
-                    if (scriptsLoaded === scripts.length) {
-                        // 全てのスクリプトが読み込めたらFirebaseを初期化
-                        initializeFirebase(userId);
-                    }
-                };
-                document.head.appendChild(script);
-            });
-        }
-
+        // ▼▼▼ Phase 2 のデータベース接続部分を修正 ▼▼▼
         function initializeFirebase(userId) {
             const firebaseConfig = {
                 apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
@@ -95,21 +54,57 @@
                 messagingSenderId: "539021057344",
                 appId: "1:539021057344:web:c4177e41fa35505680aea5"
             };
-
             firebase.initializeApp(firebaseConfig);
             const db = firebase.firestore();
 
             db.collection("users").doc(userId).onSnapshot((doc) => {
                 if (doc.exists) {
+                    // スタンプ数の表示
                     document.getElementById("stamps").innerText = doc.data().stamps || 0;
+                    
+                    // ▼▼▼ 履歴を表示する処理を追加 ▼▼▼
+                    const history = doc.data().visitHistory || [];
+                    const historyList = document.getElementById('history-list');
+                    historyList.innerHTML = ''; // 一旦リストを空にする
+
+                    if (history.length > 0) {
+                        // 履歴を新しい順に並び替える
+                        history.slice().reverse().forEach(date => {
+                            const li = document.createElement('li');
+                            li.textContent = date;
+                            historyList.appendChild(li);
+                        });
+                    } else {
+                        const li = document.createElement('li');
+                        li.textContent = '履歴はありません';
+                        historyList.appendChild(li);
+                    }
+
                 } else {
                     db.collection("users").doc(userId).set({ stamps: 0 });
                 }
-                // ボタンの表示を元に戻す
                 const loadButton = document.getElementById('load-stamps-btn');
                 loadButton.innerText = 'スタンプ数を更新';
                 loadButton.disabled = false;
             });
+        }
+        
+        // --- ここから下は変更なし ---
+        function loadFirebaseAndGetStamps(userId) {
+             const scripts = ["https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js", "https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"];
+             let scriptsLoaded = 0;
+             scripts.forEach(function(src) {
+                 const script = document.createElement('script');
+                 script.src = src;
+                 script.async = false;
+                 script.onload = function() {
+                     scriptsLoaded++;
+                     if (scriptsLoaded === scripts.length) {
+                         initializeFirebase(userId);
+                     }
+                 };
+                 document.head.appendChild(script);
+             });
         }
     </script>
 </body>
