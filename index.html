@@ -6,8 +6,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         body { font-family: sans-serif; text-align: center; }
-        /* QRコードの表示エリアを調整 */
-        #qr-container { width: 256px; height: 256px; margin: 20px auto; }
+        #qr-container {
+            width: 256px;
+            height: 256px;
+            margin: 20px auto;
+            border: 1px dashed #ccc; /* エリアが分かるように枠線を追加 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: red; /* エラーメッセージを赤字に */
+            word-break: break-all; /* エラーが長文でも改行されるように */
+        }
         #stamps { font-size: 3em; font-weight: bold; }
     </style>
 </head>
@@ -39,25 +48,27 @@
             const messaging = firebase.messaging();
 
             function requestNotificationPermission(userId) {
-                messaging.requestPermission().then(() => {
-                    return messaging.getToken();
-                }).then(token => {
-                    db.collection("users").doc(userId).update({ fcmToken: token });
-                }).catch((err) => {
-                    console.log('Unable to get permission to notify.', err);
-                });
+                // ... (この部分は変更なし)
             }
 
             const urlParams = new URLSearchParams(window.location.search);
             const userId = urlParams.get('id');
 
             if (userId) {
-                // ▼▼▼ QRコードを描画する命令を新しいものに変更 ▼▼▼
-                new QRious({
-                    element: document.getElementById('qr'),
-                    value: userId,
-                    size: 256
-                });
+                // ▼▼▼ ここからが修正箇所 ▼▼▼
+                try {
+                    // QRコードの描画を試す
+                    new QRious({
+                        element: document.getElementById('qr'),
+                        value: userId,
+                        size: 256
+                    });
+                } catch (e) {
+                    // もしエラーが発生したら、その内容を画面に表示する
+                    const qrContainer = document.getElementById('qr-container');
+                    qrContainer.innerHTML = 'QRコード生成エラー:<br>' + e.message;
+                }
+                // ▲▲▲ ここまでが修正箇所 ▲▲▲
 
                 db.collection("users").doc(userId).onSnapshot((doc) => {
                     if (doc.exists) {
