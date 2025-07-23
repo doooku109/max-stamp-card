@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -5,13 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; }
-        #qr-container { width: 256px; height: 256px; margin: 20px auto; }
-        
-        /* ▼▼▼ スタンプのデザイン ▼▼▼ */
+        body { font-family: sans-serif; text-align: center; padding: 10px; }
         #stamp-sheet {
             display: grid;
-            grid-template-columns: repeat(10, 1fr); /* 横に10個並べる */
+            grid-template-columns: repeat(10, 1fr);
             gap: 5px;
             width: 90%;
             max-width: 400px;
@@ -22,39 +20,36 @@
         }
         .stamp-slot {
             width: 100%;
-            padding-bottom: 100%; /* 正方形にするためのテクニック */
+            padding-bottom: 100%;
             position: relative;
             background-color: #f0f0f0;
-            border-radius: 50%; /* 丸いマスにする */
+            border-radius: 50%;
         }
         .stamp-mark {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 1.5em;
+            font-size: 1.5em; /* マスのサイズに合わせて調整 */
             font-weight: bold;
             color: #d9534f;
-            display: none; /* 初期状態では非表示 */
+            display: none;
         }
         .filled .stamp-mark {
-            display: block; /* .filledクラスが付いたら表示 */
+            display: block;
         }
-        /* ▲▲▲ ここまで ▲▲▲ */
-
-        #load-stamps-btn { padding: 10px 20px; font-size: 1em; cursor: pointer; margin-top: 10px; }
-        #history-container { margin-top: 30px; text-align: left; display: inline-block; }
-        /* ... その他のスタイルは変更なし ... */
+        #load-stamps-btn { padding: 10px 20px; font-size: 1em; cursor: pointer; }
+        #qr-container { width: 200px; height: 200px; margin: 20px auto; } /* 少し小さく調整 */
+        #history-container { margin-top: 20px; text-align: left; display: inline-block; }
+        #history-list { list-style: none; padding-left: 0; }
+        #history-list li { background: #f4f4f4; margin-bottom: 5px; padding: 8px 12px; border-radius: 4px; }
     </style>
 </head>
 <body>
     <h1>あなたのスタンプカード</h1>
-    
-    <div id="stamp-sheet">
-        </div>
-
+    <div id="stamp-sheet"></div>
     <button id="load-stamps-btn">スタンプと履歴を更新</button>
-    <hr>
+    <hr style="margin-top: 20px;">
     <div id="qr-container">
         <canvas id="qr"></canvas>
     </div>
@@ -66,46 +61,107 @@
     </div>
 
     <script>
-        // --- Phase 1: QRコードとスタンプの枠を描画 ---
+        // Phase 1: ページ読み込み時に、QRとスタンプの枠だけを確実に表示
         document.addEventListener('DOMContentLoaded', function() {
-            // ▼▼▼ スタンプの枠を50個生成する ▼▼▼
+            // スタンプの枠を50個生成
             const stampSheet = document.getElementById('stamp-sheet');
             for (let i = 0; i < 50; i++) {
                 const slot = document.createElement('div');
-                slot.classList.add('stamp-slot');
+                slot.className = 'stamp-slot';
                 slot.innerHTML = '<span class="stamp-mark">Ⓜ</span>';
                 stampSheet.appendChild(slot);
             }
-            // ▲▲▲ ここまで ▲▲▲
 
-            // ... QRコード表示とボタンの処理は変更なし ...
+            function getUserIdFromUrl() {
+                const query = window.location.search.substring(1);
+                const params = query.split('&');
+                for (let i = 0; i < params.length; i++) {
+                    const pair = params[i].split('=');
+                    if (pair[0] === 'id') { return decodeURIComponent(pair[1].replace(/\+/g, ' ')); }
+                }
+                return null;
+            }
+
+            const userId = getUserIdFromUrl();
+            const loadButton = document.getElementById('load-stamps-btn');
+
+            if (userId) {
+                new QRious({ element: document.getElementById('qr'), value: userId, size: 200 });
+                loadButton.addEventListener('click', function() {
+                    loadFirebaseAndGetData(userId);
+                    loadButton.innerText = '更新中...';
+                    loadButton.disabled = true;
+                });
+            } else {
+                document.body.innerHTML = "<h1>無効なURLです</h1>";
+            }
         });
 
-        // --- Phase 2: データベース接続部分を修正 ---
-        function initializeFirebaseAndRender(userId) {
-            // ... Firebase初期化は変更なし ...
-            
-            db.collection("users").doc(userId).onSnapshot((doc) => {
-                // ▼▼▼ スタンプの数を取得して、マークを表示する処理 ▼▼▼
-                const stampSlots = document.querySelectorAll('.stamp-slot');
-                let stampCount = 0;
-                if (doc.exists) {
-                    stampCount = doc.data().stamps || 0;
-                }
-                
-                stampSlots.forEach((slot, index) => {
-                    if (index < stampCount) {
-                        slot.classList.add('filled'); // スタンプ数に応じて.filledクラスを付与
-                    } else {
-                        slot.classList.remove('filled');
+        // Phase 2: ボタンが押されてからFirebaseを読み込み、データを反映
+        function loadFirebaseAndGetData(userId) {
+            const scripts = [
+                "https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js",
+                "https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"
+            ];
+            let scriptsLoaded = 0;
+            scripts.forEach(function(src) {
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = false;
+                script.onload = function() {
+                    scriptsLoaded++;
+                    if (scriptsLoaded === scripts.length) {
+                        initializeFirebaseAndRender(userId);
                     }
-                });
-                // ▲▲▲ ここまで ▲▲▲
-
-                // ... 履歴表示とボタンの処理は変更なし ...
+                };
+                document.head.appendChild(script);
             });
         }
-        // ... その他の関数は変更なし ...
+
+        function initializeFirebaseAndRender(userId) {
+            const firebaseConfig = {
+                apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
+                authDomain: "max-stamp-card.firebaseapp.com",
+                projectId: "max-stamp-card",
+                storageBucket: "max-stamp-card.appspot.com",
+                messagingSenderId: "539021057344",
+                appId: "1:539021057344:web:c4177e41fa35505680aea5"
+            };
+            if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+            const db = firebase.firestore();
+
+            db.collection("users").doc(userId).onSnapshot((doc) => {
+                const historyList = document.getElementById('history-list');
+                const stampSlots = document.querySelectorAll('.stamp-slot');
+                historyList.innerHTML = ''; 
+
+                if (doc.exists) {
+                    const stampCount = doc.data().stamps || 0;
+                    stampSlots.forEach((slot, index) => {
+                        slot.classList.toggle('filled', index < stampCount);
+                    });
+                    
+                    const history = doc.data().visitHistory || [];
+                    if (history.length > 0) {
+                        history.slice().reverse().forEach(date => {
+                            const li = document.createElement('li');
+                            li.textContent = date;
+                            historyList.appendChild(li);
+                        });
+                    } else {
+                        historyList.innerHTML = '<li>来店履歴はありません</li>';
+                    }
+                } else {
+                    stampSlots.forEach(slot => slot.classList.remove('filled'));
+                    historyList.innerHTML = '<li>まだ登録されていません</li>';
+                    db.collection("users").doc(userId).set({ stamps: 0 });
+                }
+                
+                const loadButton = document.getElementById('load-stamps-btn');
+                loadButton.innerText = 'スタンプと履歴を更新';
+                loadButton.disabled = false;
+            });
+        }
     </script>
 </body>
 </html>
