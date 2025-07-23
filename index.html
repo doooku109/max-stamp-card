@@ -25,55 +25,51 @@
             apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
             authDomain: "max-stamp-card.firebaseapp.com",
             projectId: "max-stamp-card",
-            storageBucket: "max-stamp-card.appspot.com", // こちらを修正しました
+            storageBucket: "max-stamp-card.appspot.com",
             messagingSenderId: "539021057344",
             appId: "1:539021057344:web:c4177e41fa35505680aea5"
         };
 
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        const messaging = firebase.messaging(); // メッセージング機能を有効化
+        // ▼▼▼ ここからが修正箇所 ▼▼▼
+        // ページの読み込みが完了してから、中の処理を実行する
+        document.addEventListener('DOMContentLoaded', function() {
+            firebase.initializeApp(firebaseConfig);
+            const db = firebase.firestore();
+            const messaging = firebase.messaging();
 
-        // ▼▼▼ プッシュ通知の機能を追加 ▼▼▼
-        function requestNotificationPermission(userId) {
-            messaging.requestPermission().then(() => {
-                console.log('Notification permission granted.');
-                // FCMトークンを取得してDBに保存
-                return messaging.getToken();
-            }).then(token => {
-                console.log('FCM Token:', token);
-                // ユーザーのデータにFCMトークンを保存
-                db.collection("users").doc(userId).update({ fcmToken: token });
-            }).catch((err) => {
-                console.log('Unable to get permission to notify.', err);
-            });
-        }
-        // ▲▲▲ プッシュ通知の機能を追加 ▲▲▲
+            function requestNotificationPermission(userId) {
+                messaging.requestPermission().then(() => {
+                    return messaging.getToken();
+                }).then(token => {
+                    db.collection("users").doc(userId).update({ fcmToken: token });
+                }).catch((err) => {
+                    console.log('Unable to get permission to notify.', err);
+                });
+            }
 
-        // URLからユーザーIDを取得
-        const urlParams = new URLSearchParams(window.location.search);
-        const userId = urlParams.get('id');
+            const urlParams = new URLSearchParams(window.location.search);
+            const userId = urlParams.get('id');
 
-        if (userId) {
-            // 自分のIDでQRコードを生成
-            new QRCode(document.getElementById("qrcode"), userId);
+            if (userId) {
+                // QRコードを描画
+                new QRCode(document.getElementById("qrcode"), userId);
 
-            // データベースを監視してスタンプ数を表示
-            db.collection("users").doc(userId).onSnapshot((doc) => {
-                if (doc.exists) {
-                    document.getElementById("stamps").innerText = doc.data().stamps || 0;
-                } else {
-                    // 初めてのユーザーならデータを作成
-                    db.collection("users").doc(userId).set({ stamps: 0 });
-                }
-            });
-            
-            // 初回アクセス時に通知の許可を求める
-            requestNotificationPermission(userId);
+                // データベースを監視
+                db.collection("users").doc(userId).onSnapshot((doc) => {
+                    if (doc.exists) {
+                        document.getElementById("stamps").innerText = doc.data().stamps || 0;
+                    } else {
+                        db.collection("users").doc(userId).set({ stamps: 0 });
+                    }
+                });
 
-        } else {
-            document.body.innerHTML = "<h1>無効なURLです</h1>";
-        }
+                requestNotificationPermission(userId);
+
+            } else {
+                document.body.innerHTML = "<h1>無効なURLです</h1>";
+            }
+        });
+        // ▲▲▲ ここまでが修正箇所 ▲▲▲
     </script>
 </body>
 </html>
