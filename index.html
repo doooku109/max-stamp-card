@@ -6,12 +6,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         body { font-family: sans-serif; text-align: center; }
-        #qr-container {
-            width: 256px;
-            height: 256px;
-            margin: 20px auto;
-        }
+        #qr-container { width: 256px; height: 256px; margin: 20px auto; }
         #stamps { font-size: 3em; font-weight: bold; }
+        #load-stamps-btn {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -20,37 +22,12 @@
         <canvas id="qr"></canvas>
     </div>
     <p>現在のスタンプ数</p>
-    <p id="stamps">0</p>
-
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js"></script>
+    <p id="stamps">（下のボタンを押して確認）</p>
+    <button id="load-stamps-btn">スタンプ数を更新</button>
 
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
-            authDomain: "max-stamp-card.firebaseapp.com",
-            projectId: "max-stamp-card",
-            storageBucket: "max-stamp-card.appspot.com",
-            messagingSenderId: "539021057344",
-            appId: "1:539021057344:web:c4177e41fa35505680aea5"
-        };
-
+        // ▼▼▼ Phase 1: QRコードの表示だけを先に行う ▼▼▼
         document.addEventListener('DOMContentLoaded', function() {
-            firebase.initializeApp(firebaseConfig);
-            const db = firebase.firestore();
-            const messaging = firebase.messaging();
-
-            function requestNotificationPermission(userId) {
-                messaging.requestPermission().then(() => {
-                    return messaging.getToken();
-                }).then(token => {
-                    db.collection("users").doc(userId).update({ fcmToken: token });
-                }).catch((err) => {
-                    console.log('Unable to get permission to notify.', err);
-                });
-            }
-
             function getUserIdFromUrl() {
                 const query = window.location.search.substring(1);
                 const params = query.split('&');
@@ -64,37 +41,76 @@
             }
 
             const userId = getUserIdFromUrl();
+            const loadButton = document.getElementById('load-stamps-btn');
 
             if (userId) {
-                let qrCodeRendered = false; // QRコードを一度だけ描画するための目印
-
-                // データベースからスタンプ数を取得して表示
-                db.collection("users").doc(userId).onSnapshot((doc) => {
-                    
-                    // ▼▼▼ 修正箇所：この中（DB接続後）でQRコードを描画する ▼▼▼
-                    if (!qrCodeRendered) {
-                        new QRious({
-                            element: document.getElementById('qr'),
-                            value: userId,
-                            size: 256
-                        });
-                        qrCodeRendered = true; // 目印を立てて、二度描画しないようにする
-                    }
-                    // ▲▲▲ 修正箇所ここまで ▲▲▲
-
-                    if (doc.exists) {
-                        document.getElementById("stamps").innerText = doc.data().stamps || 0;
-                    } else {
-                        db.collection("users").doc(userId).set({ stamps: 0 });
-                    }
+                // QRコードを描画
+                new QRious({
+                    element: document.getElementById('qr'),
+                    value: userId,
+                    size: 256
                 });
 
-                requestNotificationPermission(userId);
+                // ボタンがクリックされたら、Firebaseの処理を開始
+                loadButton.addEventListener('click', function() {
+                    loadFirebaseAndGetStamps(userId);
+                    loadButton.innerText = '更新中...';
+                    loadButton.disabled = true;
+                });
 
             } else {
                 document.body.innerHTML = "<h1>無効なURLです</h1>";
             }
         });
+
+        // ▼▼▼ Phase 2: ボタンが押されてからFirebaseを読み込み、接続する ▼▼▼
+        function loadFirebaseAndGetStamps(userId) {
+            const scripts = [
+                "https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js",
+                "https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"
+            ];
+            let scriptsLoaded = 0;
+
+            scripts.forEach(function(src) {
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = false; // 順番に読み込む
+                script.onload = function() {
+                    scriptsLoaded++;
+                    if (scriptsLoaded === scripts.length) {
+                        // 全てのスクリプトが読み込めたらFirebaseを初期化
+                        initializeFirebase(userId);
+                    }
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        function initializeFirebase(userId) {
+            const firebaseConfig = {
+                apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
+                authDomain: "max-stamp-card.firebaseapp.com",
+                projectId: "max-stamp-card",
+                storageBucket: "max-stamp-card.appspot.com",
+                messagingSenderId: "539021057344",
+                appId: "1:539021057344:web:c4177e41fa35505680aea5"
+            };
+
+            firebase.initializeApp(firebaseConfig);
+            const db = firebase.firestore();
+
+            db.collection("users").doc(userId).onSnapshot((doc) => {
+                if (doc.exists) {
+                    document.getElementById("stamps").innerText = doc.data().stamps || 0;
+                } else {
+                    db.collection("users").doc(userId).set({ stamps: 0 });
+                }
+                // ボタンの表示を元に戻す
+                const loadButton = document.getElementById('load-stamps-btn');
+                loadButton.innerText = 'スタンプ数を更新';
+                loadButton.disabled = false;
+            });
+        }
     </script>
 </body>
 </html>
