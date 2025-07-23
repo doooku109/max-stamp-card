@@ -6,86 +6,63 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         body { font-family: sans-serif; text-align: center; }
-        #qr-container {
-            width: 256px;
-            height: 256px;
-            margin: 20px auto;
+        #qr-container { width: 256px; height: 256px; margin: 20px auto; }
+        /* ▼▼▼ 調査用の表示エリアを追加 ▼▼▼ */
+        #debug-info {
+            margin: 20px;
+            padding: 10px;
+            border: 1px solid blue;
+            background-color: #eef;
+            color: blue;
         }
-        #stamps { font-size: 3em; font-weight: bold; }
     </style>
 </head>
 <body>
+    <div id="debug-info">調査中...</div>
+
     <h1>あなたのスタンプカード</h1>
     <div id="qr-container">
         <canvas id="qr"></canvas>
     </div>
-    <p>現在のスタンプ数</p>
+    <p>現在のスタンプ数: (調査のため停止中)</p>
     <p id="stamps">0</p>
 
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js"></script>
-
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyClDJHiOlr_PHtewVXdiZBFhEd7rUluwac",
-            authDomain: "max-stamp-card.firebaseapp.com",
-            projectId: "max-stamp-card",
-            storageBucket: "max-stamp-card.appspot.com",
-            messagingSenderId: "539021057344",
-            appId: "1:539021057344:web:c4177e41fa35505680aea5"
-        };
-
         document.addEventListener('DOMContentLoaded', function() {
-            firebase.initializeApp(firebaseConfig);
-            const db = firebase.firestore();
-            const messaging = firebase.messaging();
-
-            function requestNotificationPermission(userId) {
-                messaging.requestPermission().then(() => {
-                    return messaging.getToken();
-                }).then(token => {
-                    db.collection("users").doc(userId).update({ fcmToken: token });
-                }).catch((err) => {
-                    console.log('Unable to get permission to notify.', err);
-                });
-            }
-            
-            // ▼▼▼ URLからIDを取得する方法を、より確実なものに変更 ▼▼▼
+            // ▼▼▼ URLからIDを取得するプログラム ▼▼▼
             function getUserIdFromUrl() {
-                const query = window.location.search.substring(1); // URLの'?'以降を取得
-                const params = query.split('&'); // '&'で区切って配列にする
+                const query = window.location.search.substring(1);
+                const params = query.split('&');
                 for (let i = 0; i < params.length; i++) {
-                    const pair = params[i].split('='); // '='で区切る
+                    const pair = params[i].split('=');
                     if (pair[0] === 'id') {
-                        return pair[1]; // 'id'が見つかったらその値を返す
+                        return decodeURIComponent(pair[1].replace(/\+/g, ' '));
                     }
                 }
-                return null; // 'id'が見つからなかったらnullを返す
+                return null;
             }
 
             const userId = getUserIdFromUrl();
-            // ▲▲▲ 変更箇所ここまで ▲▲▲
+            const debugInfo = document.getElementById('debug-info');
 
+            // ▼▼▼ 取得したIDを画面に表示する ▼▼▼
             if (userId) {
-                new QRious({
-                    element: document.getElementById('qr'),
-                    value: userId,
-                    size: 256
-                });
-
-                db.collection("users").doc(userId).onSnapshot((doc) => {
-                    if (doc.exists) {
-                        document.getElementById("stamps").innerText = doc.data().stamps || 0;
-                    } else {
-                        db.collection("users").doc(userId).set({ stamps: 0 });
-                    }
-                });
-
-                requestNotificationPermission(userId);
-
+                debugInfo.innerText = 'URLから取得したID: ' + userId;
             } else {
-                document.body.innerHTML = "<h1>無効なURLです</h1>";
+                debugInfo.innerText = 'URLからIDを取得できませんでした。';
+            }
+
+            // ▼▼▼ QRコード表示のプログラム ▼▼▼
+            if (userId) {
+                try {
+                    new QRious({
+                        element: document.getElementById('qr'),
+                        value: userId,
+                        size: 256
+                    });
+                } catch (e) {
+                    debugInfo.innerText += '\nQRコード生成エラー: ' + e.message;
+                }
             }
         });
     </script>
