@@ -6,7 +6,7 @@
     <style>
         body { font-family: sans-serif; text-align: center; padding: 10px; }
         #reader { max-width: 500px; margin: 20px auto; border: 2px solid #eee; }
-        #result { margin-top: 20px; font-weight: bold; color: green; font-size: 1.2em;}
+        #result { margin-top: 20px; font-weight: bold; color: green; font-size: 1.2em; white-space: pre-wrap; }
         #error { color: red; }
     </style>
 </head>
@@ -31,54 +31,75 @@
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        // Firestoreの配列操作用のオブジェクトを取得
+        const fieldValue = firebase.firestore.FieldValue;
 
-        // QRコードのスキャンが成功したときに呼ばれる関数
         function onScanSuccess(decodedText, decodedResult) {
-            // スキャナーを停止させて、多重読み込みを防ぐ
             html5QrcodeScanner.clear();
-            
             const userId = decodedText;
             const resultDiv = document.getElementById('result');
-            
-            // 確認のポップアップを表示
-            if (confirm(`お客様ID: ${userId}\n\nスタンプを1つ追加しますか？`)) {
-                
-                // データベースのスタンプ数を1増やし、最終来店日を更新する
-                const userRef = db.collection("users").doc(userId);
-                db.runTransaction((transaction) => {
-                    return transaction.get(userRef).then((doc) => {
-                        if (!doc.exists) {
-                            throw "このお客様は存在しません。";
-                        }
-                        
-                        const newStampCount = (doc.data().stamps || 0) + 1;
-                        // 今日の日付を YYYY-MM-DD 形式で取得
-                        const today = new Date().toISOString().slice(0, 10);
-                        
-                        // スタンプ数と最終来店日（lastVisitDate）を更新
-                        transaction.update(userRef, { 
-                            stamps: newStampCount,
-                            lastVisitDate: today
-                        });
 
-                        return newStampCount;
-                    });
-                }).then((newStampCount) => {
-                    resultDiv.innerText = `✅ スタンプを付与しました！\n(お客様の合計: ${newStampCount}個)\n\n次の人をスキャンするにはページを再読み込みしてください。`;
-                }).catch((error) => {
-                    resultDiv.innerHTML = `<p id="error">❌ エラーが発生しました。<br>${error}</p><p>ページを再読み込みしてやり直してください。</p>`;
-                });
-
-            } else {
-                 resultDiv.innerText = "キャンセルしました。ページを再読み込みしてください。";
+            const amountStr = prompt(`お客様ID: ${userId}\n\nお支払い金額（税抜）を入力してください。`);
+            if (amountStr === null || amountStr.trim() === '') {
+                resultDiv.innerText = "キャンセルしました。ページを再読み込みしてください。";
+                return;
             }
+            const paymentAmount = parseInt(amountStr, 10);
+            if (isNaN(paymentAmount)) {
+                resultDiv.innerHTML = `<p id="error">無効な金額です。ページを再読み込みしてください。</p>`;
+                return;
+            }
+            
+            const userRef = db.collection("users").doc(userId);
+
+            db.runTransaction((transaction) => {
+                return transaction.get(userRef).then((doc) => {
+                    let currentStamps = 0;
+                    let currentKeep = 0;
+                    // ▼▼▼ 履歴を保存する配列を取得 ▼▼▼
+                    let history = [];
+
+                    if (doc.exists) {
+                        currentStamps = doc.data().stamps || 0;
+                        currentKeep = doc.data().keep || 0;
+                        history = doc.data().visitHistory || []; // 既存の履歴を取得
+                    }
+
+                    let totalAmount = currentKeep + paymentAmount;
+                    totalAmount = Math.round(totalAmount / 10) * 10;
+                    const newStamps = Math.floor(totalAmount / 1000);
+                    const newKeep = totalAmount % 1000;
+                    const finalStamps = currentStamps + newStamps;
+                    const today = new Date().toISOString().slice(0, 10);
+
+                    // ▼▼▼ 履歴配列を更新 ▼▼▼
+                    history.push(today); // 新しい来店日を追加
+                    if (history.length > 5) {
+                        history.shift(); // 配列が5件を超えたら、一番古いもの（先頭）を削除
+                    }
+
+                    // データベースを更新
+                    transaction.set(userRef, { 
+                        stamps: finalStamps,
+                        keep: newKeep,
+                        lastVisitDate: today,
+                        visitHistory: history // 更新した履歴を保存
+                    }, { merge: true });
+
+                    return {
+                        addedStamps: newStamps,
+                        finalStamps: finalStamps,
+                        newKeep: newKeep
+                    };
+                });
+            }).then((result) => {
+                resultDiv.innerText = `✅ スタンプを付与しました！\n\n今回追加されたスタンプ: ${result.addedStamps}個\nお客様の合計スタンプ: ${result.finalStamps}個\n次回の繰越金額: ${result.newKeep}円\n\nページを再読み込みして次の人をスキャンしてください。`;
+            }).catch((error) => {
+                resultDiv.innerHTML = `<p id="error">❌ エラーが発生しました。<br>${error}</p><p>ページを再読み込みしてやり直してください。</p>`;
+            });
         }
 
-        // スキャナーを初期化
-        const html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader", { fps: 10, qrbox: 250 }
-        );
-        // スキャナーを開始
+        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
         html5QrcodeScanner.render(onScanSuccess);
     </script>
 </body>
