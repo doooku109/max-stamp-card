@@ -17,14 +17,28 @@
     <div id="result"></div>
 
     <script>
-        // アプリケーションを開始するメインの関数
-        function startApp() {
+        // ▼▼▼ このページ全体のメインプログラム ▼▼▼
+        document.addEventListener('DOMContentLoaded', function() {
+            // スキャナーライブラリのスクリプトを動的に作成
+            const scannerLibrary = document.createElement('script');
+            scannerLibrary.src = 'https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js';
+
+            // ライブラリの読み込みが完了した後に実行される処理
+            scannerLibrary.onload = function() {
+                startScanner(); // ライブラリが準備できたので、カメラを起動
+            };
+
+            // 作成したスクリプトをページに追加して、読み込みを開始
+            document.head.appendChild(scannerLibrary);
+        });
+
+
+        // カメラを起動する関数
+        function startScanner() {
             let html5QrcodeScanner; 
 
             function onScanSuccess(decodedText, decodedResult) {
-                if (html5QrcodeScanner) {
-                    html5QrcodeScanner.clear();
-                }
+                if (html5QrcodeScanner) { html5QrcodeScanner.clear(); }
                 const userId = decodedText;
                 const resultDiv = document.getElementById('result');
                 const amountStr = prompt(`お客様ID: ${userId}\n\nお支払い金額（税抜）を入力してください。`);
@@ -80,10 +94,7 @@
                 messagingSenderId: "539021057344",
                 appId: "1:539021057344:web:c4177e41fa35505680aea5"
             };
-            // 既に初期化されている場合は何もしない
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            }
+            if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
             const db = firebase.firestore();
             const userRef = db.collection("users").doc(userId);
             const resultDiv = document.getElementById('result');
@@ -113,8 +124,5 @@
             });
         }
     </script>
-
-    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js" onload="startApp()"></script>
-
 </body>
 </html>
